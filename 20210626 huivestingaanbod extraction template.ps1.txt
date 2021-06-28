@@ -1,0 +1,132 @@
+
+<#
+# get data from min max view and past in Excel template
+# copy extraciontable from excel template
+#>
+
+$ExtractionTable = @(
+    @{site='acantus';baseurl='https://woningzoeken.acantus.nl/portal/object/frontend/getobject/format/json';beginid='2';endid='1042'},
+    @{site='dewoningzoeker';baseurl='https://www.dewoningzoeker.nl/portal/object/frontend/getobject/format/json';beginid='22804';endid='25841'},
+    @{site='frieslandhuurt';baseurl='https://www.frieslandhuurt.nl/portal/object/frontend/getobject/format/json';beginid='3';endid='38083'},
+    @{site='hureninhollandrijnlands';baseurl='https://www.hureninhollandrijnland.nl/portal/object/frontend/getobject/format/json';beginid='85056';endid='164455'},
+    @{site='hurennoordveluwe';baseurl='https://www.hurennoordveluwe.nl/portal/object/frontend/getobject/format/json';beginid='1';endid='9656'},
+    @{site='klikvoorkamers';baseurl='https://www.klikvoorkamers.nl/portal/object/frontend/getobject/format/json';beginid='9';endid='54102'},
+    @{site='klikvoorwonen';baseurl='https://www.klikvoorwonen.nl/portal/object/frontend/getobject/format/json';beginid='1';endid='70831'},
+    @{site='mijnwoningzoeken';baseurl='https://www.mijnwoningzoeken.nl/portal/object/frontend/getobject/format/json';beginid='1';endid='8335'},
+    @{site='onshuiz';baseurl='https://www.onshuiz.nl/portal/object/frontend/getobject/format/json';beginid='2';endid='8438'},
+    @{site='oostwestwonen';baseurl='https://woningzoeken.oostwestwonen.nl/portal/object/frontend/getobject/format/json';beginid='2';endid='598'},
+    @{site='room';baseurl='https://www.room.nl/portal/object/frontend/getobject/format/json';beginid='1';endid='47122'},
+    @{site='svnk';baseurl='https://www.svnk.nl/portal/object/frontend/getobject/format/json';beginid='1';endid='27130'},
+    @{site='thuisbijantares';baseurl='https://wonen.thuisbijantares.nl/portal/object/frontend/getobject/format/json';beginid='4';endid='103'},
+    @{site='thuisinlimburg';baseurl='https://www.thuisinlimburg.nl/portal/object/frontend/getobject/format/json';beginid='8';endid='74247'},
+    @{site='thuiskompas';baseurl='https://www.thuiskompas.nl/portal/object/frontend/getobject/format/json';beginid='8';endid='7410'},
+    @{site='thuistreffervechtdal';baseurl='https://www.thuistreffervechtdal.nl/portal/object/frontend/getobject/format/json';beginid='1';endid='2267'},
+    @{site='wonenindekop';baseurl='https://www.wonenindekop.nl/portal/object/frontend/getobject/format/json';beginid='168';endid='2877'},
+    @{site='wonenlimburgaccent';baseurl='https://www.wonenlimburgaccent.nl/portal/object/frontend/getobject/format/json';beginid='1';endid='591'},
+    @{site='woninginzicht';baseurl='https://www.woninginzicht.nl/portal/object/frontend/getobject/format/json';beginid='1';endid='46802'},
+    @{site='wooniezie';baseurl='https://www.wooniezie.nl/portal/object/frontend/getobject/format/json';beginid='1';endid='117060'},
+    @{site='woonnet-haaglanden';baseurl='https://www.woonnet-haaglanden.nl/portal/object/frontend/getobject/format/json';beginid='100003';endid='213727'},
+    @{site='zuidwestwonen';baseurl='https://www.zuidwestwonen.nl/portal/object/frontend/getobject/format/json';beginid='4';endid='68936'})
+    | % { New-Object object | Add-Member -NotePropertyMembers $_ -PassThru }
+
+
+$basedir = "S:\_ue\HuisvAanbod\"
+
+$useragent = "Neverbrowse1"
+
+
+# process each site
+$ExtractionTable | %{
+  $site = $_.site
+  $baseurl = $_.baseurl
+  [int]$beginid = $_.beginid
+  [int]$endid = $_.endid
+  
+  #change window title
+	$host.ui.RawUI.WindowTitle = $site
+	$basefile = "post_"+"$site"+"_id_DATA_"
+  $baseoutput ="$basedir$basefile"
+	$batchcounter = 1
+	$outputfile = "$baseoutput$batchcounter.json"
+	$extractcounter = 0
+	$counterforbatch = 0
+	$alldata = $null
+  $newfile = "Y"
+  Add-Content $outputfile "["
+
+  # loop for site
+	For ($i=$endid;$i -ge $beginid;$i--){
+	  $id = $null
+	  $id = "?id=$i"
+		$url = $null
+		$url = "$baseurl$id"
+		$postresult = $null
+		try{
+			$postresult = Invoke-RestMethod -Uri $url #-SessionVariable websession 
+		}catch{
+			#do nothing en go to next
+		}
+	  If ($postresult -eq $null){
+	   	Write-Host "i: $i ERROR"
+	  }else{
+	    $Extractiondate=Get-Date -format "dd-MMM-yyyy HH:mm:ss"
+	    $alldata = $alldata + ',{"wid":"' + $i + '",' + '"ExtractionDate":"' + "$Extractiondate" + '",' + '"data":[' + ($postresult.result | ConvertTo-Json -Depth 100 -Compress) + ']}'
+	   	Write-Host "i: $i SUCCESS"
+	  }
+
+	 	$extractcounter++
+	 	If ($extractcounter -lt 250){
+	 	  #continue
+	 	}else{
+	 	  If($newfile -eq "Y"){
+	 	    # strip comma
+	 	    If ($alldata -eq $null){
+	 	      # do nothing, but keep newfile flag for possibel next null
+          $newfile = "Y"
+	 	    }else{
+	        If ($alldata.Substring(0,1) -eq ","){
+	          $alldata = $alldata.Substring(1)
+	        }
+          $newfile = "N"
+	 	    }
+	 	  }else{
+	 	    #do nothing
+	 	  }
+      # add alldata if there is anything in it
+      If ($alldata -eq $null){
+      	# do nothing
+      }else{
+		    Add-Content $outputfile "$alldata"
+		    $alldata = $null
+      }
+	 	  $extractcounter = 0
+	 	}
+
+	  $counterforbatch++
+	 	If ($counterforbatch -lt 10000){
+	 	  #continue
+	 	}else{
+	 	  # new file
+			Add-Content $outputfile "]"
+			$batchcounter++
+			$outputfile = "$baseoutput$batchcounter.json"
+			Add-Content $outputfile "["
+	 	  $counterforbatch = 0
+	 	  $newfile = "Y"
+	 	}
+	}
+
+	# add the last bid
+	Add-Content $outputfile "$alldata"
+  Add-Content $outputfile "]"
+
+  #inefficient way of stripping another comma
+	$a = Get-Content $outputfile -raw
+	If ($a.substring(3,1) -eq ","){
+	  $a = $a.substring(0,3)+$a.substring(4)
+	  Set-Content $outputfile -value $a
+	}
+}
+
+}
+
